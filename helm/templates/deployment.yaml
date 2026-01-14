@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "coolkit.fullname" . }}
+  labels:
+    {{- include "coolkit.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "coolkit.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 10%
+      maxSurge: 10%
+  template:
+    metadata:
+      labels:
+        {{- include "coolkit.labels" . | nindent 8 }}
+      annotations:
+        {{- if .Values.prometheus.scrape }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "{{ .Values.prometheus.path }}"
+        prometheus.io/port: "{{ .Values.ports.obs }}"
+        {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+      containers:
+        - name: coolkit
+          image: "{{ .Values.image.repository }}:{{ required "image.tag (SHA) is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.http }}
+            - name: obs
+              containerPort: {{ .Values.ports.obs }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            {{- if .Values.peerDiscovery.enabled }}
+            - name: PEER_DNS
+              value: "{{ include "coolkit.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local"
+            {{- end }}
+            {{- if .Values.database.enabled }}
+            {{- with .Values.database.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          {{- if and .Values.probes.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}
+              port: {{ .Values.ports.obs }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.path }}
+              port: {{ .Values.ports.obs }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          {{- end }}
+
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.securityContext.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+            capabilities:
+              drop: ["ALL"]
+
+        {{- if and .Values.database.enabled .Values.database.cloudSqlProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: "{{ .Values.database.cloudSqlProxy.image }}"
+          args:
+            - "-instances={{ required "database.cloudSqlProxy.instanceConnectionName is required" .Values.database.cloudSqlProxy.instanceConnectionName }}=tcp:0.0.0.0:{{ .Values.database.cloudSqlProxy.port }}"
+          ports:
+            - name: db
+              containerPort: {{ .Values.database.cloudSqlProxy.port }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+        {{- end }}
+
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "coolkit.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- end }}

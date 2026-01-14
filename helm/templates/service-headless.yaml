@@ -1,0 +1,17 @@
+{{- if and .Values.peerDiscovery.enabled .Values.peerDiscovery.headlessService }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "coolkit.fullname" . }}-headless
+  labels:
+    {{- include "coolkit.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: {{ include "coolkit.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: cache
+      port: {{ .Values.ports.http }}
+      targetPort: http
+{{- end }}

@@ -1,0 +1,17 @@
+{{- if and .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "coolkit.fullname" . }}
+  labels:
+    {{- include "coolkit.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "coolkit.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  endpoints:
+    - port: obs
+      path: {{ .Values.prometheus.path }}
+      interval: {{ .Values.prometheus.serviceMonitor.interval }}
+{{- end }}

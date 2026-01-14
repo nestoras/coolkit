@@ -1,0 +1,72 @@
+image:
+  repository: gcr.io/example/coolkit
+  tag: ""                 
+  pullPolicy: IfNotPresent
+
+replicaCount: 10          
+
+resources:
+  requests:
+    cpu: "2"
+    memory: "4Gi"
+  limits:
+    cpu: "2"
+    memory: "4Gi"
+
+ports:
+  http: 8080
+  obs: 2345
+
+service:
+  type: ClusterIP
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 80%        
+
+peerDiscovery:
+  enabled: true
+  headlessService: true
+
+probes:
+  enabled: true
+  path: /healthz
+  port: obs      
+
+prometheus:
+  scrape: true
+  path: /metrics
+  port: obs
+  serviceMonitor:
+    enabled: false
+    interval: 30s  
+
+keda:
+  enabled: true
+  pollingInterval: 15
+  cooldownPeriod: 60
+  minReplicaCount: 10
+  maxReplicaCount: 100
+  metricsApi:
+    url: "http://scaler.production.svc.cluster.local/estimate/coolkit"
+    targetValue: 1     
+    activationTargetValue: 1
+
+database:
+  enabled: true
+  env: [] # e.g. [{name: DATABASE_URL, value: postgres://user:pass@127.0.0.1:5432/db}]
+  cloudSqlProxy:
+    enabled: false
+    image: gcr.io/cloudsql-docker/gce-proxy:1.36.0
+    instanceConnectionName: ""      # project:region:instance
+    port: 5432
+
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  whenUnsatisfiable: ScheduleAnyway

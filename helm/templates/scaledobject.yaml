@@ -1,0 +1,21 @@
+{{- if .Values.keda.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "coolkit.fullname" . }}
+  labels:
+    {{- include "coolkit.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "coolkit.fullname" . }}
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  triggers:
+    - type: metrics-api
+      metadata:
+        url: {{ .Values.keda.metricsApi.url | quote }}
+        targetValue: {{ .Values.keda.metricsApi.targetValue | quote }}
+        activationTargetValue: {{ .Values.keda.metricsApi.activationTargetValue | quote }}
+{{- end }}
